@@ -1,1 +1,1 @@
-# 2025-McDonalds-Pokemon-Cards-Monte-Carlo
+# Monte Carlo: 2025 McDonalds Pokemon Cards
