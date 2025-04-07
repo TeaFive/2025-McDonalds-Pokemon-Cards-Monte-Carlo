@@ -9,7 +9,7 @@ have pretty and unique art that I enjoy admiring.
 
 On January 21, 2025, McDonalds and Pokemon announced a collaboration, introducing the 
 [Pokemon Happy Meal](https://www.pokemon.com/us/pokemon-news/mcdonalds-pokemon-happy-meals-collaboration).
-Each Happy Meal came with a four-card booster pack. The collaboration had a set of fifteen cards to collect-- 
+Each Happy Meal came with a TCG four-card booster pack. The collaboration had a set of fifteen cards to collect-- 
 seven holofoil and eight standard cards.
 
 Out of boredom, I wondered: "*How many Happy Meals would I have to buy to get all fifteen cards?*" Of
@@ -26,14 +26,20 @@ number of Happy Meals needed to get all holofoil cards and standard cards are in
 Let $H$ be the number of Happy Meals required to collect all seven holofoil cards. Let $h_i$ be the number
 of meals needed to collect the $i$-th new holofoil card after $i-1$ cards have been collected. Note that each 
 $h_i$ follows a [geometric distribution](https://en.wikipedia.org/wiki/Geometric_distribution)-- that is,
-the number of trials for a first success. The total number of meals is $H = h_1 + h_2 + ... + h_7$.
+the number of trials for a first success. The total number of meals is $H = h_1 + h_2 + \cdots + h_7$.
+
+Let $h_i$ be the number of meals needed to collect the next new holofoil provided we already have $i$ unique cards.
+Let $p_i$ be the probability of pulling a new card we don't have.
+$$ \begin{equation*}
+    E[h_i] = \frac{1}{p_i} = \frac{7}{7 - i + 1}
+\end{equation*}$$
 
 Now, we can calculate the expectation of $H$:
 $$ \begin{align*}
-    E(H) & = E(h_1 + h_2 + ... + h_7) \\
+    E[H] & = E(h_1 + h_2 + \cdots + h_7) \\
          & = \sum_{i=1}^{7} E(h_i) && \text{linearity of expectation}\\
          & = \sum_{i=1}^{7} \frac{7}{7-i+1} \\
-         & = \frac{7}{7} + \frac{7}{7-1} + ... + \frac{7}{1} \\
+         & = \frac{7}{7} + \frac{7}{7-1} + \cdots + \frac{7}{1} \\
          & = 7 \cdot H_7 && \text{where } H_7 \text{ is the 7th harmonic number} \\
          & \approx 18.15 \text{ Happy Meals}
 \end{align*}$$
@@ -43,21 +49,42 @@ Calculating the expectation of the standard cards is similar to the holofoil exp
 to account for the fact that three cards are pulled per pack, meaning we have to account for the possibility
 of getting 0, 1, 2, or 3 new cards. 
 
-We'll follow the [hypergeometric distriubtion](https://en.wikipedia.org/wiki/Hypergeometric_distribution).
-% Suppose I draw $k$ given a total of $N$ items 
+We'll follow the [hypergeometric distribution](https://en.wikipedia.org/wiki/Hypergeometric_distribution).
+Given a total of $N$ items, suppose $n$ items are drawn where there are $k$ new items left to collect. The
+expectation is given by $E(X) = n \cdot \frac{k}{N}$ 
 
-Let $N$ be the number of new cards, and let $i$ represent the number of unique cards already obtained.
+Let $N = 8$, $n = 3$, and $k= 8 - i$ where $i$ represents the number of unique cards already obtained. Let
+$s_i$ be the number of meals needed to collect new card(s) when $i$ unique cards have already been collected.
 $$\begin{align*}
-    E[N \mid i] & = 3 \cdot \frac{8-i}{8}
+    E[s_i \mid i] & = 3 \cdot \frac{8-i}{8}
 \end{align*}$$
 
-Let $S$ be the number of Happy Meals required to collect all eight standard cards.
+Let $S$ be the number of Happy Meals required to collect all eight standard cards. It's important to note that
+the summation will start from $i = 0$ and go to $i = 7$ as it needs to make sense that we're considering the
+range from having $0$ of the unique cards (we have nothing!) to $7$ of the eight cards, meaning we have only
+one card left to find.
 
-$$
-    E(S) = \sum_{i=1}^{8} \frac{1}{i}
-$$
+$$ \begin{align*}
+    E[S] & = \sum_{i=0}^{7} \frac{1}{E[s_i \mid i]} \\
+         & = \sum_{i=0}^{7} \frac{1}{3 \cdot \frac{8-i}{8}} \\
+         & = \sum_{i=0}^{7} \frac{8}{3(8-i)} \\
+         & = \frac{8}{3} \sum_{i=0}^{7} \frac{1}{8-i} \\
+         & = \frac{8}{3} \sum_{j=1}^{8} \frac{1}{j} && \text{Reindex of $j = 8 - i$} \\
+         & = \frac{8}{3} \cdot H_8 && \text{where $H_8$ is the 8th harmonic number} \\
+         & \approx 7.25 \text{ Happy Meals} \\
+\end{align*} $$
 
 ## Putting It Together
+With the expectations down (pun very much intended) and foundation laid, we can formalize our original question. We know 
+holofoil and standard cards are pulled independently like separate collection processes in parallel. Ultimately, we really 
+only "wait" on whichever set takes longer to complete. Formally, let $M$ represent the number of meals needed to collect
+all fifteen Pokemon cards.
+$$ \begin{align*}
+    E[M] & = \text{max}(E[H], E[S]) \\ 
+         & = \text{max}(18.15, 7.25) \\ 
+         & = 18.15 \text{ Happy Meals}
+\end{align*}$$
+In short, we're expecting to be bottlenecked by those elusive holofoil cards!
 
 # Monte Carlo Simulation 
 
