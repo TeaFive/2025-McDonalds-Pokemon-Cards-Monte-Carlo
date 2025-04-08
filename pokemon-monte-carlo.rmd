@@ -1,5 +1,13 @@
 ---
 title: "Monte Carlo: 2025 McDonalds Pokemon Cards"
+output: 
+    html_document:
+        theme: flatly
+        # toc: true
+        # toc_float:
+        #     collapsed: false
+        #     smooth_scroll: true
+        highlight: haddock
 ---
 
 # Background and Motivation
@@ -86,12 +94,119 @@ $$ \begin{align*}
 \end{align*}$$
 In short, we're expecting to be bottlenecked by those elusive holofoil cards!
 
-# Monte Carlo Simulation 
-
+# Monte Carlo Simulation
+## Code {.tabset .tabset-fade .tabset-pills}
+### `monte_carlo_meals.R`
 ```{r}
-random_card <- sample(1:7, 1)
-print(random_card)
+# Run one (1) simulation of buying Happy Meals until all
+# fifteen cards are collected.
+#
+# @return - list of total meals, holofoil meals, and standard
+#           meals for one full simulation
+buy_meals <- function() {
+  # Enumerated holofoil (1-7) and standard sets (1-8)
+  holofoils_collected <- rep(FALSE, 7)
+  standards_collected <- rep(FALSE, 8)
+
+  # Meal counts
+  exp_meals_holofoil <- 0
+  exp_meals_standard <- 0
+
+  # Collect holofoils
+  while (!all(holofoils_collected)) {
+    pulled_cards <- sample(x = (1:7), size = 1)
+    holofoils_collected[pulled_cards] <- TRUE
+    exp_meals_holofoil <- exp_meals_holofoil + 1
+  }
+
+  # Collect standards
+  while (!all(standards_collected)) {
+    pulled_cards <- sample(x = (1:8), size = 3, replace = FALSE)
+    standards_collected[pulled_cards] <- TRUE
+    exp_meals_standard <- exp_meals_standard + 1
+  }
+
+  # Return list of meal data
+  return(list(
+    meals_total = max(exp_meals_holofoil, exp_meals_standard),
+    meals_holofoil = exp_meals_holofoil,
+    meals_standard = exp_meals_standard
+  ))
+}
 ```
+### `prepare_data.R`
+```{r}
+# Given data from one Monte Carlo simulation of n iterations,
+# prepare it in a data frame to be merged with the main data frame
+#
+# @param  raw_data - list of experimental number of total meals
+# @return simulation_data - a data frame to bind to the main data frame
+prepare_data <- function(raw_data) {
+  # Constant
+  actual_mean <- 18.15
+
+  # Prep data
+  meals_total_list <- as.numeric(sapply(raw_data, function(x) x$meals_total))
+  meals_holofoil_list <- sapply(raw_data, function(x) x$meals_holofoil)
+  meals_standard_list <- sapply(raw_data, function(x) x$meals_standard)
+
+  # Get meal values
+  meals_total <- mean(meals_total_list)
+  meals_holofoil <- mean(meals_holofoil_list)
+  meals_standard <- mean(meals_standard_list)
+
+  # Compute error statistics comparing simulation vs analytical expected value
+  n <- length(meals_total_list)
+  abs_error <- abs(meals_total - actual_mean)
+  std_error <- sd(meals_total_list) / sqrt(n)
+  rel_error <- abs((meals_total - actual_mean) / actual_mean) * 100
+  variance <- var(meals_total_list)
+
+  # Add experiment for n iterations to experiment data
+  simulation_data <- data.frame(Num_Iterations = n,
+                                Meals_Holofoil = meals_holofoil,
+                                Meals_Standard = meals_standard,
+                                Meals_Total = meals_total,
+                                Abs_Error = abs_error,
+                                Std_Error = std_error,
+                                Rel_Error = rel_error,
+                                Variance = variance)
+
+  return(simulation_data)
+}
+```
+### `experiment.R` {.active}
+```{r}
+# Experiment data
+experiment_data <- data.frame(Num_Iterations = numeric(),
+                              Meals_Holofoil = numeric(),
+                              Meals_Standard = numeric(),
+                              Meals_Total = numeric(),
+                              Abs_Error = numeric(),
+                              Std_Error = numeric(),
+                              Rel_Error = numeric(),
+                              Variance = numeric())
+
+# Experiment variables
+num_iterations <- c(10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000)
+set.seed(20250121)
+
+# Run experiment
+# for (n in num_iterations) {
+#   # Run current simulation for n iterations
+#   raw_data <- replicate(n, buy_meals(), simplify = FALSE)
+
+#   # Prepare data
+#   simulation_data <- prepare_data(raw_data)
+
+#   # Add simulation to experiment data frame
+#   experiment_data <- rbind(experiment_data, simulation_data)
+# }
+```
+
+# Results and Analysis
+
+## Bootstrapping
 
 # Further Considerations and What-ifs
 - Donald J. Newman and Lawrence Shepp's [Double Dixie Cup problem](https://faculty.wharton.upenn.edu/wp-content/uploads/2012/04/Double-dixie-cup-problem.pdf)
