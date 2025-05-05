@@ -1,3 +1,9 @@
-old/
 pokemon-monte-carlo.html
+
+# Hide RStudio files
+src/.Rproj.user
+src/shared
+src/.RData
+src/.Rhistory
+src/pokemon_monte_carlo.Rproj
 .Rproj.user

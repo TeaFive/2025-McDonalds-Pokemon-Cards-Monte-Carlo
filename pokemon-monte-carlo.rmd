@@ -1,12 +1,12 @@
 ---
-title: "Monte Carlo: 2025 McDonalds Pokemon Cards"
+title: "Monte Carlo: 2025 McDonald's Pokemon Cards"
 output: 
     html_document:
         theme: flatly
         # toc: true
         # toc_float:
         #     collapsed: false
-        #     smooth_scroll: true
+        #     smooth_scroll: false
         highlight: haddock
 ---
 
@@ -34,7 +34,9 @@ number of Happy Meals needed to get all holofoil cards and standard cards are in
 Let $H$ be the number of Happy Meals required to collect all seven holofoil cards. Let $h_i$ be the number
 of meals needed to collect the $i$-th new holofoil card after $i-1$ cards have been collected. Note that each 
 $h_i$ follows a [geometric distribution](https://en.wikipedia.org/wiki/Geometric_distribution)-- that is,
-the number of trials for a first success. The total number of meals is $H = h_1 + h_2 + \cdots + h_7$.
+the number of trials for a first success. The total number of meals is $H = h_1 + h_2 + \cdots + h_7$
+(Not to be confused with the [harmonic numbers](https://en.wikipedia.org/wiki/Harmonic_number) which will be
+used in the expectation calculation).
 
 Let $h_i$ be the number of meals needed to collect the next new holofoil provided we already have $i$ unique cards.
 Let $p_i$ be the probability of pulling a new card we don't have.
@@ -54,7 +56,7 @@ $$ \begin{align*}
 
 ## Expectation of Standard Cards
 Calculating the expectation of the standard cards is similar to the holofoil expectation, but we now have
-to account for the fact that three cards are pulled per pack, meaning we have to account for the possibility
+to account for the fact that three cards are pulled per pack, meaning we have to consider the possibility
 of getting 0, 1, 2, or 3 new cards. 
 
 We'll follow the [hypergeometric distribution](https://en.wikipedia.org/wiki/Hypergeometric_distribution).
@@ -94,74 +96,44 @@ $$ \begin{align*}
 \end{align*}$$
 In short, we're expecting to be bottlenecked by those elusive holofoil cards!
 
-# Monte Carlo Simulation
+# Uniform Monte Carlo Simulation
 ## Code {.tabset .tabset-fade .tabset-pills}
-### `monte_carlo_meals.R`
-```{r}
-# Run one (1) simulation of buying Happy Meals until all
-# fifteen cards are collected.
-#
-# @return - list of total meals, holofoil meals, and standard
-#           meals for one full simulation
-buy_meals <- function() {
-  # Enumerated holofoil (1-7) and standard sets (1-8)
-  holofoils_collected <- rep(FALSE, 7)
-  standards_collected <- rep(FALSE, 8)
-
-  # Meal counts
-  exp_meals_holofoil <- 0
-  exp_meals_standard <- 0
-
-  # Collect holofoils
-  while (!all(holofoils_collected)) {
-    pulled_cards <- sample(x = (1:7), size = 1)
-    holofoils_collected[pulled_cards] <- TRUE
-    exp_meals_holofoil <- exp_meals_holofoil + 1
-  }
-
-  # Collect standards
-  while (!all(standards_collected)) {
-    pulled_cards <- sample(x = (1:8), size = 3, replace = FALSE)
-    standards_collected[pulled_cards] <- TRUE
-    exp_meals_standard <- exp_meals_standard + 1
-  }
-
-  # Return list of meal data
-  return(list(
-    meals_total = max(exp_meals_holofoil, exp_meals_standard),
-    meals_holofoil = exp_meals_holofoil,
-    meals_standard = exp_meals_standard
-  ))
-}
+Load necessary helpers.
+```{r, results='hide', echo='hide', message='hide', warning='hide'}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
 ```
+
 ### `prepare_data.R`
-```{r}
-# Given data from one Monte Carlo simulation of n iterations,
+```{r, results='hide'}
+# Given data from one Monte Carlo simulation of n iterations, 
 # prepare it in a data frame to be merged with the main data frame
 #
 # @param  raw_data - list of experimental number of total meals
 # @return simulation_data - a data frame to bind to the main data frame
-prepare_data <- function(raw_data) {
+prepare_data <- function(raw_data)
+{
   # Constant
   actual_mean <- 18.15
-
+  
   # Prep data
-  meals_total_list <- as.numeric(sapply(raw_data, function(x) x$meals_total))
+  meals_total_list <- as.numeric(sapply(raw_data, function(x) x$meals_total)) 
   meals_holofoil_list <- sapply(raw_data, function(x) x$meals_holofoil)
   meals_standard_list <- sapply(raw_data, function(x) x$meals_standard)
-
+  
   # Get meal values
   meals_total <- mean(meals_total_list)
   meals_holofoil <- mean(meals_holofoil_list)
   meals_standard <- mean(meals_standard_list)
-
+  
   # Compute error statistics comparing simulation vs analytical expected value
-  n <- length(meals_total_list)
-  abs_error <- abs(meals_total - actual_mean)
+  abs_error <- abs(meals_total - ACTUAL_MEAN)
   std_error <- sd(meals_total_list) / sqrt(n)
-  rel_error <- abs((meals_total - actual_mean) / actual_mean) * 100
+  rel_error <- abs((meals_total - ACTUAL_MEAN) / ACTUAL_MEAN) * 100
   variance <- var(meals_total_list)
-
+  
   # Add experiment for n iterations to experiment data
   simulation_data <- data.frame(Num_Iterations = n,
                                 Meals_Holofoil = meals_holofoil,
@@ -171,44 +143,155 @@ prepare_data <- function(raw_data) {
                                 Std_Error = std_error,
                                 Rel_Error = rel_error,
                                 Variance = variance)
-
+  
   return(simulation_data)
+}
+```
+### `estimate_meals_mc.R`
+```{r, results='hide'}
+# Run {#} iterations of buying Happy Meals until all
+# fifteen cards are collected.
+#
+# @return - list of total meals, holofoil meals, and standard 
+#           meals for one full simulation
+# source("prepare_data.R")
+
+estimate_meals <- function(iterations) 
+{
+  summary_data <- data.frame(Iteration_Num = numeric(iterations),
+                             Meals_Holofoil = numeric(iterations),
+                             Meals_Standard = numeric(iterations),
+                             Meals_Total = numeric(iterations))
+  
+  for (i in 1:iterations) {
+    # Enumerated holofoil (1-7) and standard sets (1-8) 
+    holofoils_collected <- rep(FALSE, 7)
+    standards_collected <- rep(FALSE, 8)
+    
+    # Meal counts
+    exp_meals_holofoil <- 0
+    exp_meals_standard <- 0
+    
+    # Collect holofoils
+    while (!all(holofoils_collected)) {
+      pulled_cards <- sample(x=(1:7), size=1)
+      holofoils_collected[pulled_cards] <- TRUE
+      exp_meals_holofoil <- exp_meals_holofoil + 1
+    }
+    
+    # Collect standards
+    while (!all(standards_collected)) {
+      pulled_cards <- sample(x=(1:8), size=3, replace=FALSE)
+      standards_collected[pulled_cards] <- TRUE
+      exp_meals_standard <- exp_meals_standard + 1
+    }
+    
+    # Add current iteration's statistics to data frame
+    summary_data$Iteration_Num[i] = i
+    summary_data$Meals_Holofoil[i] = exp_meals_holofoil
+    summary_data$Meals_Standard[i] = exp_meals_standard
+    summary_data$Meals_Total[i] = max(exp_meals_holofoil, exp_meals_standard)
+  }
+  
+  # Result
+  return(summary_data)
 }
 ```
 ### `experiment.R` {.active}
 ```{r}
-# Experiment data
-experiment_data <- data.frame(Num_Iterations = numeric(),
-                              Meals_Holofoil = numeric(),
-                              Meals_Standard = numeric(),
-                              Meals_Total = numeric(),
-                              Abs_Error = numeric(),
-                              Std_Error = numeric(),
-                              Rel_Error = numeric(),
-                              Variance = numeric())
-
-# Experiment variables
-num_iterations <- c(10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000)
+# source("estimate_meals_mc.R")
+# Constants and experiment variables
+ACTUAL_TOTAL_MEALS <- 18.15
+NUM_ITERATIONS <- 10000
 set.seed(20250121)
 
 # Run experiment
-# for (n in num_iterations) {
-#   # Run current simulation for n iterations
-#   raw_data <- replicate(n, buy_meals(), simplify = FALSE)
+experiment_data <- estimate_meals(NUM_ITERATIONS)
 
-#   # Prepare data
-#   simulation_data <- prepare_data(raw_data)
-
-#   # Add simulation to experiment data frame
-#   experiment_data <- rbind(experiment_data, simulation_data)
-# }
+analysis_data <- data.frame(Iteration_Num = experiment_data$Iteration_Num,
+                            Cum_Meals_Total = cumsum(experiment_data$Meals_Total),
+                            Mean_Meals_Total = cumsum(experiment_data$Meals_Total) / experiment_data$Iteration_Num,
+                            Iteration_Bottleneck = ifelse(experiment_data$Meals_Holofoil >= experiment_data$Meals_Standard, 
+                                                          "Holofoil",
+                                                          "Standard"))
 ```
 
-# Results and Analysis
+##  Results and Analysis
+First, let's peek at our experiment numbers:
+```{r}
+head(experiment_data)
+head(analysis_data)
+```
 
-## Bootstrapping
+Followed by an overview:
+```{r}
+summary(experiment_data)
+```
+We see the sample mean is on par with our expected value ($18.1$ vs $18.15$). 
+To further understand this, we can visualize the [law of large numbers](https://en.wikipedia.org/wiki/Law_of_large_numbers) in action:
+```{r, message='hide'}
+ggplot(analysis_data, aes(x = Iteration_Num, y = Mean_Meals_Total)) +
+  geom_line(color = "darkblue") +
+  geom_hline(yintercept = ACTUAL_TOTAL_MEALS, linetype = "dashed", color = "red") +
+  ylim(c(min(analysis_data$Mean_Meals_Total), max(analysis_data$Mean_Meals_Total))) +
+  scale_y_continuous(breaks = pretty_breaks()) +
+  labs(title = "Approximation of Total Meals Needed for All 15 Cards",
+       x = "Number of Iterations",
+       y = "Estimated Mean Number of Meals")
+```
 
-# Further Considerations and What-ifs
-- Donald J. Newman and Lawrence Shepp's [Double Dixie Cup problem](https://faculty.wharton.upenn.edu/wp-content/uploads/2012/04/Double-dixie-cup-problem.pdf)
+Now, let's visualize the distributions of our meals:
+```{r, message='hide', warning='hide'}
+ggplot(experiment_data, aes(x=Meals_Total)) + 
+  geom_histogram(color="darkblue", fill="lightblue", binwidth=1) + 
+  scale_x_continuous(breaks = pretty_breaks(max(experiment_data$Meals_Total) / 5)) +
+  scale_y_continuous(breaks = pretty_breaks(10)) +
+  labs(title = "Distribution of Total Meals Needed for All 15 Cards",
+       x = "Number of Meals",
+       y = "Count")
+```
 
-# Conclusion
+An interesting question to consider is how many times will holofoil bottleneck
+the collection of all fifteen cards versus the standard cards? Our theoretical
+values show it takes over double the meals on average to collect all holofoil
+cards than the standard cards, but that doesn't rule out the possibility that
+standard cards will be the culprit. Based on our experiment, let's see how many
+times each card set bottlenecked us.
+```{r, message='hide', warning='hide'}
+bottlenecks_freqs <- as.data.frame(table(unlist(analysis_data$Iteration_Bottleneck)))
+colnames(bottlenecks_freqs) <- c("Card_Type", "Count")
+bottlenecks_freqs$Percent <- round(bottlenecks_freqs$Count / sum(bottlenecks_freqs$Count) * 100, 1)
+bottlenecks_freqs$Label <- paste0(bottlenecks_freqs$Percent, "%")
+
+ggplot(bottlenecks_freqs, aes(x = "", y = Count, fill = Card_Type)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) + 
+  geom_text(aes(label = Label), 
+            position = position_stack(vjust = 0.5),
+            color = "black", size = 4) +
+  guides(fill = guide_legend(title = "Card Type")) + 
+  scale_fill_brewer(palette = "Blues") +
+  theme_void() + 
+  labs(title = "Percentage of Bottleneck Types")
+```
+
+So, it's rather rare that our standard cards will be the bottleneck. Let's see
+the distributions to get all of the cards in the standard and holofoil sets individually.
+```{r, message='hide', warning='hide'}
+meal_types_df <- experiment_data %>% 
+  select(Meals_Holofoil, Meals_Standard) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Card_Type",
+               values_to = "Count")
+
+ggplot(meal_types_df, aes(x = Card_Type, y = Count, color = Count, fill = Card_Type)) + 
+  geom_boxplot(outlier.color = "red", outlier.shape = 8) + 
+  labs(title = "Meals Distribution Needed by Card Type",
+       x = "Card Type",
+       y = "Number of Meals")
+```
+
+Aha, there are a few outliers that take longer than some of the holofoil cards!
+On average, it takes around 18 meals to collect all 15 cards, with holofoil cards 
+far more likely to delay completion. The simulation results closely match our 
+theoretical expectations.
