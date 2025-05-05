@@ -3,11 +3,12 @@ title: "Monte Carlo: 2025 McDonald's Pokemon Cards"
 output: 
     html_document:
         theme: flatly
-        # toc: true
-        # toc_float:
-        #     collapsed: false
-        #     smooth_scroll: false
+        toc: true
+        toc_float:
+            collapsed: false
+            smooth_scroll: false
         highlight: haddock
+filename: index.html
 ---
 
 # Background and Motivation
